@@ -3,7 +3,8 @@
 import numpy as np
 import scipy
 from scipy.signal import butter, welch
-from scipy.sparse import spdiags
+from scipy.sparse import eye, spdiags
+from scipy.sparse.linalg import spsolve
 
 
 def get_hr(signal, sampling_rate=30, minimum_bpm=45, maximum_bpm=150):
@@ -20,21 +21,24 @@ def get_hr(signal, sampling_rate=30, minimum_bpm=45, maximum_bpm=150):
 
 
 def _detrend(signal, regularization=100):
+    """Smoothness-prior detrending without a dense matrix inverse.
+
+    This computes exactly the same expression as the official implementation:
+    ``(I - inv(I + lambda^2 D.T D)) @ signal``.  Solving the sparse
+    pentadiagonal system avoids constructing and inverting an NxN dense matrix.
+    """
     length = signal.shape[0]
-    identity = np.identity(length)
     diagonals = np.array(
         [np.ones(length), -2 * np.ones(length), np.ones(length)]
     )
     difference = spdiags(
         diagonals, np.array([0, 1, 2]), length - 2, length
-    ).toarray()
-    return np.dot(
-        identity
-        - np.linalg.inv(
-            identity + (regularization**2) * np.dot(difference.T, difference)
-        ),
-        signal,
+    ).tocsc()
+    system = eye(length, format="csc") + (regularization**2) * (
+        difference.T @ difference
     )
+    trend = spsolve(system, np.asarray(signal, dtype=np.float64))
+    return np.asarray(signal, dtype=np.float64) - trend
 
 
 def calculate_hr(prediction, label, fs=30, diff_flag=False):

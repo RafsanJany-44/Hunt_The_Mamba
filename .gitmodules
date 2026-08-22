@@ -1,0 +1,3 @@
+[submodule "official/RhythmMamba"]
+	path = official/RhythmMamba
+	url = https://github.com/zizheng-guo/RhythmMamba.git

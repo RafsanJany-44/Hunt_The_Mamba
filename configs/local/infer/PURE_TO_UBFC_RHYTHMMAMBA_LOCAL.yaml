@@ -1,0 +1,114 @@
+BASE:
+- ''
+TOOLBOX_MODE: only_test
+TRAIN:
+  BATCH_SIZE: 16
+  EPOCHS: 30
+  LR: 3e-4
+  MODEL_FILE_NAME: PURE_UBFC_RhythmMamba
+  DATA:
+    FS: 30
+    DATASET: PURE
+    DO_PREPROCESS: false
+    DATA_FORMAT: NDCHW
+    DATA_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_DataView/PURE
+    CACHED_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed/PURE
+    EXP_DATA_NAME: ''
+    BEGIN: 0.0
+    END: 0.8
+    PREPROCESS:
+      DATA_TYPE:
+      - Standardized
+      LABEL_TYPE: Standardized
+      DO_CHUNK: true
+      CHUNK_LENGTH: 160
+      CROP_FACE:
+        DO_CROP_FACE: true
+        USE_LARGE_FACE_BOX: true
+        LARGE_BOX_COEF: 1.5
+        DETECTION:
+          DO_DYNAMIC_DETECTION: false
+          DYNAMIC_DETECTION_FREQUENCY: 30
+          USE_MEDIAN_FACE_BOX: false
+      RESIZE:
+        H: 128
+        W: 128
+VALID:
+  DATA:
+    FS: 30
+    DATASET: PURE
+    DO_PREPROCESS: false
+    DATA_FORMAT: NDCHW
+    DATA_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_DataView/PURE
+    CACHED_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed/PURE
+    EXP_DATA_NAME: ''
+    BEGIN: 0.8
+    END: 1.0
+    PREPROCESS:
+      DATA_TYPE:
+      - Standardized
+      LABEL_TYPE: Standardized
+      DO_CHUNK: true
+      CHUNK_LENGTH: 160
+      CROP_FACE:
+        DO_CROP_FACE: true
+        USE_LARGE_FACE_BOX: true
+        LARGE_BOX_COEF: 1.5
+        DETECTION:
+          DO_DYNAMIC_DETECTION: false
+          DYNAMIC_DETECTION_FREQUENCY: 30
+          USE_MEDIAN_FACE_BOX: false
+      RESIZE:
+        H: 128
+        W: 128
+TEST:
+  METRICS:
+  - MAE
+  - RMSE
+  - MAPE
+  - Pearson
+  - SNR
+  USE_LAST_EPOCH: false
+  DATA:
+    FS: 30
+    DATASET: UBFC
+    DO_PREPROCESS: false
+    DATA_FORMAT: NDCHW
+    DATA_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_DataView/UBFC
+    CACHED_PATH: /media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed/UBFC
+    EXP_DATA_NAME: ''
+    BEGIN: 0.0
+    END: 1.0
+    PREPROCESS:
+      DATA_TYPE:
+      - Standardized
+      LABEL_TYPE: Standardized
+      DO_CHUNK: true
+      CHUNK_LENGTH: 160
+      CROP_FACE:
+        DO_CROP_FACE: true
+        USE_LARGE_FACE_BOX: true
+        LARGE_BOX_COEF: 1.5
+        DETECTION:
+          DO_DYNAMIC_DETECTION: false
+          DYNAMIC_DETECTION_FREQUENCY: 30
+          USE_MEDIAN_FACE_BOX: false
+      RESIZE:
+        H: 128
+        W: 128
+  OUTPUT_SAVE_DIR: /media/data/rPPG/Code/GitHub/Catch_The_Mamba/results/predictions
+DEVICE: cuda:0
+NUM_OF_GPU_TRAIN: 1
+LOG:
+  PATH: /media/data/rPPG/Code/GitHub/Catch_The_Mamba/results/runs
+MODEL:
+  DROP_RATE: 0.2
+  NAME: RhythmMamba
+  MODEL_DIR: /media/data/rPPG/Code/GitHub/Catch_The_Mamba/results/models
+INFERENCE:
+  BATCH_SIZE: 16
+  EVALUATION_METHOD: FFT
+  EVALUATION_WINDOW:
+    USE_SMALLER_WINDOW: false
+    WINDOW_SIZE: 10
+  MODEL_PATH: /media/data/rPPG/Code/GitHub/Catch_The_Mamba/official/RhythmMamba/PreTrainedModels/PURE_cross_RhythmMamba.pth

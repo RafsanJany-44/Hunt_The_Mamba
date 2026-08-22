@@ -12,15 +12,11 @@ import torch
 
 from loss import HybridLoss
 from model import RhythmMamba as SimplifiedRhythmMamba
-from settings import DEVICE, SEED
+from settings import DEVICE, PROJECT_ROOT, SEED
 from trainer import normalize_prediction, set_reproducible
 
 
-# Only this optional development check refers to the official source.
-# Training and inference do not use this path.
-OFFICIAL_ROOT = Path(
-    "/media/data/rPPG/Code/GitHub/Catch_The_Mamba/official/RhythmMamba"
-)
+OFFICIAL_ROOT = PROJECT_ROOT / "official" / "RhythmMamba"
 
 
 def load_module(module_name, file_path):

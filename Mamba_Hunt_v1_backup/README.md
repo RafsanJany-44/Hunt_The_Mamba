@@ -21,8 +21,6 @@ augmentation corrections belong to the later development phase.
 - `trainer.py`: training, checkpoint saving, and evaluation.
 - `parity_check.py`: fixed-weight official-versus-simplified comparison.
 - `train_*.py` and `evaluate_*.py`: simple entry points.
-- `infer_pure_to_ubfc.py`: test UBFC with the PURE cross checkpoint.
-- `infer_ubfc_to_pure.py`: test PURE with the UBFC cross checkpoint.
 
 ## Run order
 
@@ -38,19 +36,3 @@ python Mamba_Hunt/train_ubfc.py 2>&1 | tee results/simplified/logs/UBFC_training
 
 Run the full simplified training only after `parity_check.py` passes and the
 official PURE and UBFC reference runs have completed.
-
-## Standalone cross-dataset inference
-
-Copy the two weights once into this folder:
-
-```bash
-cp official/RhythmMamba/PreTrainedModels/PURE_cross_RhythmMamba.pth Mamba_Hunt/checkpoints/
-cp official/RhythmMamba/PreTrainedModels/UBFC_cross_RhythmMamba.pth Mamba_Hunt/checkpoints/
-```
-
-Then inference is independent of the official code directory:
-
-```bash
-python Mamba_Hunt/infer_pure_to_ubfc.py
-python Mamba_Hunt/infer_ubfc_to_pure.py
-```

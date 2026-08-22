@@ -9,20 +9,14 @@ from pathlib import Path
 
 
 # -----------------------------------------------------------------------------
-# Paths
+# Paths on Rafsan's workstation
 # -----------------------------------------------------------------------------
 
-# This follows the Mamba_Hunt folder wherever it is moved.
-MAMBA_HUNT_ROOT = Path(__file__).resolve().parent
+PROJECT_ROOT = Path("/media/data/rPPG/Code/GitHub/Catch_The_Mamba")
 PREPROCESSED_ROOT = Path(
     "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed"
 )
-OUTPUT_ROOT = MAMBA_HUNT_ROOT / "results"
-CHECKPOINT_ROOT = MAMBA_HUNT_ROOT / "checkpoints"
-
-# Standalone pretrained weights used for official cross-dataset inference.
-PURE_CROSS_CHECKPOINT = CHECKPOINT_ROOT / "PURE_cross_RhythmMamba.pth"
-UBFC_CROSS_CHECKPOINT = CHECKPOINT_ROOT / "UBFC_cross_RhythmMamba.pth"
+OUTPUT_ROOT = PROJECT_ROOT / "results" / "simplified"
 
 
 # -----------------------------------------------------------------------------

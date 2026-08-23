@@ -38,7 +38,7 @@ FULL_CACHE_ROOT = DATA_ROOT / "RhythmMamba_Preprocessed_Independent"
 
 # Start with "smoke".  After validate_raw_data.py and parity_check.py pass,
 # change this to "full" and rerun preprocess_all.py.
-RUN_MODE = "smoke"  # allowed values: "smoke", "full"
+RUN_MODE = "full"  # allowed values: "smoke", "full"
 DATASETS_TO_PROCESS = ("PURE", "UBFC")
 SMOKE_RECORDINGS_PER_DATASET = 1
 MAX_WORKERS = 4

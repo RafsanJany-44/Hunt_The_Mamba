@@ -14,9 +14,16 @@ from pathlib import Path
 
 # This follows the Mamba_Hunt folder wherever it is moved.
 MAMBA_HUNT_ROOT = Path(__file__).resolve().parent
+# PREPROCESSED_ROOT = Path(
+#     "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed"
+# )
+
 PREPROCESSED_ROOT = Path(
-    "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed"
+    "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed_Independent"
 )
+
+
+
 OUTPUT_ROOT = MAMBA_HUNT_ROOT / "results"
 CHECKPOINT_ROOT = MAMBA_HUNT_ROOT / "checkpoints"
 

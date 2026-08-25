@@ -1,0 +1,28 @@
+====================================================================================
+PURE_INTRA — Old Protocol
+====================================================================================
+Description                : PURE intra checkpoint on the PURE test split
+Checkpoint                 : /media/data/rPPG/Code/GitHub/Catch_The_Mamba/Mamba_Hunt/results/models/PURE/PURE_RhythmMamba_Epoch29.pth
+Dataset / split            : PURE / 0.6–1.0
+Aggregation                : window_to_recording
+Recordings                 : 24
+Measurements               : 1464
+Window / stride            : 8.0 / 1.0 seconds
+FFT bin spacing            : 7.500000 BPM
+Band-pass                  : 0.67–3.0 Hz, order 3
+------------------------------------------------------------------------------------
+PRIMARY recording-macro MAE: 1.113002 BPM
+Pooled measurement MAE     : 1.121926 BPM
+Pooled measurement RMSE    : 4.837259 BPM
+Pooled measurement MAPE    : 1.830010 %
+Pooled measurement Pearson : 0.989565
+Absolute-error SD           : 4.705354 BPM
+Accuracy within 5 BPM      : 89.208 %
+Recording-macro MAE SE     : 0.253890 BPM
+Pooled MAE standard error  : 0.122976 BPM
+Official-formula RMSE +/-  : 5.538609
+Pooled MAPE standard error : 0.235150 %
+Pooled Pearson std. error  : 0.003768
+Mean waveform Pearson      : 0.603671
+Mean SNR                    : nan dB
+SNR standard error         : nan dB

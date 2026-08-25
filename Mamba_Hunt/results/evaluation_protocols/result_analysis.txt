@@ -1,0 +1,78 @@
+
+1. Complete experiment × protocol comparison
+
+The main metric below is recording-macro MAE: every recording gets equal weight. For old and prism, window errors are first averaged within a recording; for official, each recording already has one HR estimate.
+
+
+
+
+| Experiment          | Protocol | Recordings / measurements | Recording-macro MAE ± SE | Recording-macro RMSE | Pooled MAE | Pooled RMSE |   MAPE % |      HR r | Within 5 BPM | Mean waveform r | SNR dB |
+| ------------------- | -------- | ------------------------: | -----------------------: | -------------------: | ---------: | ----------: | -------: | --------: | -----------: | --------------: | -----: |
+| **PURE_INTRA**      | official |                   24 / 24 |        **0.405 ± 0.057** |                0.405 |      0.405 |   **0.493** |     0.54 |     1.000 |       100.0% |           0.636 |  12.30 |
+|                     | old      |                 24 / 1464 |            1.113 ± 0.254 |                3.451 |      1.122 |       4.837 |     1.83 |     0.990 |        89.2% |           0.604 |      — |
+|                     | PRISM    |                  24 / 153 |            0.910 ± 0.125 |                1.313 |      0.901 |       1.732 |     1.18 |     0.999 |        97.4% |           0.591 |      — |
+| **UBFC_INTRA**      | official |                   12 / 12 |        **0.630 ± 0.209** |                0.630 |      0.630 |   **0.961** |     0.64 |     0.996 |       100.0% |           0.842 |   8.41 |
+|                     | old      |                  12 / 668 |            0.870 ± 0.106 |                3.137 |      0.865 |       3.421 |     0.87 |     0.953 |        91.2% |           0.721 |      — |
+|                     | PRISM    |                   12 / 70 |            1.037 ± 0.435 |                1.775 |      1.058 |       3.930 |     1.06 |     0.938 |        98.6% |           0.708 |      — |
+| **PURE→UBFC CROSS** | official |                   42 / 42 |            0.952 ± 0.240 |                0.952 |      0.952 |   **1.826** |     1.04 |     0.995 |        95.2% |           0.823 |   6.35 |
+|                     | old      |                 42 / 2280 |            0.949 ± 0.132 |                2.862 |  **0.895** |       3.249 |     0.97 |     0.983 |        90.4% |           0.725 |      — |
+|                     | PRISM    |                  42 / 239 |        **0.935 ± 0.220** |                1.404 |      0.901 |       2.666 | **0.95** |     0.988 |    **96.7%** |           0.716 |      — |
+| **UBFC→PURE CROSS** | official |               **59 / 59** |        **1.986 ± 0.808** |                1.986 |  **1.986** |   **6.514** | **3.59** | **0.961** |    **91.5%** |       **0.572** |   8.94 |
+|                     | old      |                 59 / 3576 |            4.161 ± 0.922 |                8.723 |      4.379 |      13.987 |     6.65 |     0.820 |        80.1% |           0.516 |      — |
+|                     | PRISM    |                  59 / 374 |            4.734 ± 1.072 |                7.529 |      4.935 |      14.576 |     7.91 |     0.793 |        89.0% |           0.510 |      — |
+
+
+Two metric details matter. First, the official protocol's “recording-macro RMSE” equals its macro MAE here because there is only one HR error per recording; each recording's one-sample RMSE is simply its absolute error. The pooled RMSE is therefore the more recognizable global RMSE for the official results.
+
+Second, I would not report reported_rmse_plus_minus_official_formula as an RMSE uncertainty. As you noted, it is derived from the standard error of the squared errors. It can be retained only if clearly labeled as the statistic used by the original official implementation, not as “RMSE ± standard error.”
+
+
+2. Intra-dataset versus cross-dataset behavior
+There is a clear directional asymmetry.
+
+For a PURE target, switching from PURE-trained intra evaluation to the UBFC-trained cross model increases recording-macro MAE substantially:
+
+| Protocol | PURE intra | UBFC→PURE cross | Cross/intra |
+| -------- | ---------: | --------------: | ----------: |
+| official |      0.405 |           1.986 |   **4.90×** |
+| old      |      1.113 |           4.161 |   **3.74×** |
+| PRISM    |      0.910 |           4.734 |   **5.20×** |
+
+
+
+For a UBFC target, PURE→UBFC is much more stable:
+| Protocol | UBFC intra | PURE→UBFC cross | Cross/intra |
+| -------- | ---------: | --------------: | ----------: |
+| official |      0.630 |           0.952 |       1.51× |
+| old      |      0.870 |           0.949 |       1.09× |
+| PRISM    |      1.037 |           0.935 |       0.90× |
+
+
+The PRISM cross value being slightly below the UBFC-intra value should not be read as cross-domain training improving performance. The intra evaluation contains only 12 held-out UBFC recordings, whereas cross uses all 42 UBFC recordings; the checkpoint and evaluation populations are different.
+
+The defensible conclusion is therefore: these runs show much stronger degradation for UBFC→PURE than for PURE→UBFC, consistently across the three evaluation procedures. It is not a clean causal estimate of the domain gap because the target recording sets are not matched.
+
+The waveform correlations support this directional pattern as well. PURE→UBFC official retains a mean waveform correlation of 0.823, close to UBFC-intra's 0.842. UBFC→PURE falls to 0.572 versus 0.636 for PURE intra.
+
+
+
+
+3. Protocol sensitivity
+The biggest finding is that protocol sensitivity itself depends strongly on the experiment.
+
+PURE_INTRA: macro MAE ranges from 0.405 to 1.113 BPM, a 2.75× span. The complete-recording official calculation is substantially less affected by transient local spectral mistakes than the short-window calculations. Old is particularly affected by occasional catastrophic harmonic windows despite most windows being exactly correct on its 7.5-BPM grid.
+
+UBFC_INTRA: macro MAE ranges from 0.630 to 1.037 BPM. The apparent PRISM degradation is disproportionately influenced by a single 10-second failure in subject41; its recording MAE becomes 6.006 BPM even though the other five windows are good.
+
+PURE→UBFC CROSS: this is remarkably stable in the primary metric: 0.935–0.952 BPM, only a 0.016-BPM range. This is strong evidence that the headline recording-average error for this checkpoint is not especially dependent on these three particular HR extraction procedures. The tail statistics still vary: pooled RMSE is 1.826 official, 3.249 old, and 2.666 PRISM.
+
+UBFC→PURE CROSS: this is highly protocol-sensitive: 1.986 official versus 4.161 old and 4.734 PRISM. Here short-window evaluation repeatedly encounters harmonic or gross local errors that a single full-record spectrum can sometimes suppress.
+
+The old and PRISM protocols also tend to identify the same difficult recordings in the problematic cross run: their recording-level MAE correlation for UBFC→PURE is about 0.856. By contrast, official versus old is only about 0.254. In PURE→UBFC, official recording MAE is essentially uncorrelated with old/PRISM recording MAE, while old versus PRISM correlates about 0.666. That is a concrete demonstration that “which recording is worst” can itself depend on the aggregation rule.
+
+There is also a resolution effect. The old protocol's direct 240-point FFT constrains errors to the 7.5-BPM grid: its observed absolute errors are 0, 7.5, 15, 22.5, 30 BPM, etc. PRISM's zero-padded grid allows much finer HR values, while official Welch produces roughly 0.540-BPM frequency spacing in these outputs. This changes both the error distribution and the interpretation of small errors.
+
+
+4. Recording- and window-level failures
+
+

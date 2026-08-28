@@ -31,7 +31,7 @@ def _chunk_index(path: Path, marker: str) -> int:
     return int(path.stem.rsplit(marker, 1)[1])
 
 
-def _validate_recording(cache_directory: Path, saved_id: str) -> int:
+def _validate_recording(cache_directory: Path, saved_id: str, expected_dtype: str) -> int:
     inputs = sorted(
         cache_directory.glob(f"{saved_id}_input*.npy"),
         key=lambda path: _chunk_index(path, "input"),
@@ -64,9 +64,10 @@ def _validate_recording(cache_directory: Path, saved_id: str) -> int:
                 f"{saved_id} chunk {expected}: unexpected shapes "
                 f"{video.shape} and {label.shape}"
             )
-        if video.dtype != np.float64 or label.dtype != np.float64:
+        target_dtype = np.dtype(expected_dtype)
+        if video.dtype != target_dtype or label.dtype != target_dtype:
             raise RuntimeError(
-                f"{saved_id} chunk {expected}: expected float64 cache, got "
+                f"{saved_id} chunk {expected}: expected {target_dtype} cache, got "
                 f"{video.dtype} and {label.dtype}"
             )
 
@@ -112,7 +113,11 @@ def main() -> None:
 
         total_clips = 0
         for recording in recordings:
-            total_clips += _validate_recording(cache_directory, recording.saved_id)
+            total_clips += _validate_recording(
+                cache_directory,
+                recording.saved_id,
+                DATASET_SETTINGS[dataset_name].cache_dtype,
+            )
         _validate_manifests(dataset_name, cache_parent)
 
         print("=" * 70)
@@ -126,4 +131,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

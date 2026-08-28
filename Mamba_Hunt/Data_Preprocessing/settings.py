@@ -1,4 +1,4 @@
-"""Editable settings for independent PURE and UBFC-rPPG preprocessing.
+"""Editable settings for independent multi-dataset preprocessing.
 
 This module intentionally replaces the official YAML/configuration stack.  Edit
 the paths and run-mode below, then execute ``preprocess_all.py``.
@@ -14,6 +14,10 @@ from pathlib import Path
 
 PURE_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/PURE")
 UBFC_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/UBFC_rPPG")
+BH_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/Pub_BH-rPPG_FULL")
+UBFC_PHYS_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/UBFC-PHYS")
+COHFACE_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/cohface_sorted")
+TOKYOTECH_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/TokyoTechDataset")
 
 
 # -----------------------------------------------------------------------------
@@ -38,11 +42,26 @@ FULL_CACHE_ROOT = DATA_ROOT / "RhythmMamba_Preprocessed_Independent"
 
 # Start with "smoke".  After validate_raw_data.py and parity_check.py pass,
 # change this to "full" and rerun preprocess_all.py.
-RUN_MODE = "full"  # allowed values: "smoke", "full"
-DATASETS_TO_PROCESS = ("PURE", "UBFC")
+RUN_MODE = "smoke"  # allowed values: "smoke", "full"
+
+# Process one new dataset at a time while validating the integration.  PURE
+# and UBFC remain registered, but do not need to be regenerated.
+DATASETS_TO_PROCESS = ("BH",)
 SMOKE_RECORDINGS_PER_DATASET = 1
-MAX_WORKERS = 4
+# New long-video adapters first reduce frames to 128x128 before temporal
+# resampling.  One worker is the conservative default for host RAM.
+MAX_WORKERS = 1
 OVERWRITE_EXISTING = False
+
+# All external datasets are converted to the 30 Hz time base used to train
+# RhythmMamba.  The existing PURE/UBFC compatibility path is unchanged.
+TARGET_FPS = 30.0
+
+# TokyoTech subjects 05-09 contain more than 180 seconds of contact PPG for
+# exactly 180 seconds of video.  Run audit_tokyotech_sync.py and inspect its
+# CSV before changing this to True.  Preprocessing refuses to guess.
+TOKYOTECH_ACCEPT_AUDIT_RECOMMENDATIONS = False
+TOKYOTECH_SYNC_REPORT = DATA_ROOT / "TokyoTech_Synchronization_Audit.json"
 
 
 # -----------------------------------------------------------------------------
@@ -72,6 +91,7 @@ class DatasetSettings:
     name: str
     raw_root: Path
     splits: tuple[tuple[float, float], ...]
+    cache_dtype: str = "float64"
 
 
 DATASET_SETTINGS = {
@@ -84,6 +104,33 @@ DATASET_SETTINGS = {
         name="UBFC",
         raw_root=UBFC_RAW_ROOT,
         splits=((0.0, 0.72), (0.72, 1.0), (0.0, 1.0)),
+    ),
+    # New datasets use subject-wise 70/30 manifests plus a complete manifest.
+    # Their float32 caches are lossless at model input because dataset.py
+    # converts every cache (including official float64 caches) to float32.
+    "BH": DatasetSettings(
+        name="BH",
+        raw_root=BH_RAW_ROOT,
+        splits=((0.0, 0.7), (0.7, 1.0), (0.0, 1.0)),
+        cache_dtype="float32",
+    ),
+    "UBFC_PHYS": DatasetSettings(
+        name="UBFC_PHYS",
+        raw_root=UBFC_PHYS_RAW_ROOT,
+        splits=((0.0, 0.7), (0.7, 1.0), (0.0, 1.0)),
+        cache_dtype="float32",
+    ),
+    "COHFACE": DatasetSettings(
+        name="COHFACE",
+        raw_root=COHFACE_RAW_ROOT,
+        splits=((0.0, 0.7), (0.7, 1.0), (0.0, 1.0)),
+        cache_dtype="float32",
+    ),
+    "TOKYOTECH": DatasetSettings(
+        name="TOKYOTECH",
+        raw_root=TOKYOTECH_RAW_ROOT,
+        splits=((0.0, 0.7), (0.7, 1.0), (0.0, 1.0)),
+        cache_dtype="float32",
     ),
 }
 
@@ -111,4 +158,3 @@ def cache_name(dataset_name: str) -> str:
         f"_det_len{t.detection_frequency}"
         f"_Median_face_box{t.use_median_face_box}"
     )
-

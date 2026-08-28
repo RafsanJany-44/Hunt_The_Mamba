@@ -25,7 +25,7 @@ PREPROCESSED_ROOT = Path(
 
 
 OUTPUT_ROOT = MAMBA_HUNT_ROOT / "results"
-CHECKPOINT_ROOT = MAMBA_HUNT_ROOT / "checkpoints"
+CHECKPOINT_ROOT = MAMBA_HUNT_ROOT / "Official_Checkpoints/"
 
 # Standalone pretrained weights used for official cross-dataset inference.
 PURE_CROSS_CHECKPOINT = CHECKPOINT_ROOT / "PURE_cross_RhythmMamba.pth"
@@ -95,4 +95,47 @@ UBFC = Experiment(
     test_begin=0.72,
     test_end=1.0,
     inference_batch_size=2,
+)
+
+# Additional datasets are currently configured for complete-dataset external
+# evaluation.  Their 70/30 subject-wise manifests are also available for later
+# training experiments.
+BH = Experiment(
+    name="BH",
+    cache_parent=PREPROCESSED_ROOT / "BH",
+    train_begin=0.0,
+    train_end=0.7,
+    test_begin=0.0,
+    test_end=1.0,
+    inference_batch_size=4,
+)
+
+UBFC_PHYS = Experiment(
+    name="UBFC_PHYS",
+    cache_parent=PREPROCESSED_ROOT / "UBFC_PHYS",
+    train_begin=0.0,
+    train_end=0.7,
+    test_begin=0.0,
+    test_end=1.0,
+    inference_batch_size=2,
+)
+
+COHFACE = Experiment(
+    name="COHFACE",
+    cache_parent=PREPROCESSED_ROOT / "COHFACE",
+    train_begin=0.0,
+    train_end=0.7,
+    test_begin=0.0,
+    test_end=1.0,
+    inference_batch_size=4,
+)
+
+TOKYOTECH = Experiment(
+    name="TOKYOTECH",
+    cache_parent=PREPROCESSED_ROOT / "TOKYOTECH",
+    train_begin=0.0,
+    train_end=0.7,
+    test_begin=0.0,
+    test_end=1.0,
+    inference_batch_size=4,
 )

@@ -182,7 +182,13 @@ def _compare_dataset(dataset_name: str) -> bool:
 def main() -> None:
     print(f"Official reference: {REFERENCE_CACHE_ROOT}")
     print(f"Independent cache : {FULL_CACHE_ROOT}")
-    results = [_compare_dataset(name) for name in DATASETS_TO_PROCESS]
+    selected = [name for name in DATASETS_TO_PROCESS if name in {"PURE", "UBFC"}]
+    if not selected:
+        raise SystemExit(
+            "Exact official-cache parity applies only to PURE and UBFC. "
+            "Use validate_cache.py for newly integrated datasets."
+        )
+    results = [_compare_dataset(name) for name in selected]
     if not all(results):
         raise SystemExit(
             "Full preprocessing parity failed. Keep using the verified reference cache."

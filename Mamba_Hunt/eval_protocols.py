@@ -75,10 +75,10 @@ UBFC_INTRA_CHECKPOINT = (
     / f"UBFC_RhythmMamba_Epoch{EPOCHS - 1}.pth"
 )
 PURE_CROSS_CHECKPOINT = (
-    MAMBA_HUNT_ROOT / "checkpoints" / "PURE_cross_RhythmMamba.pth"
+    MAMBA_HUNT_ROOT / "Official_Checkpoints" / "PURE_cross_RhythmMamba.pth"
 )
 UBFC_CROSS_CHECKPOINT = (
-    MAMBA_HUNT_ROOT / "checkpoints" / "UBFC_cross_RhythmMamba.pth"
+    MAMBA_HUNT_ROOT / "Official_Checkpoints" / "UBFC_cross_RhythmMamba.pth"
 )
 
 OUTPUT_ROOT = MAMBA_HUNT_ROOT / "results" / "evaluation_protocols"
@@ -354,6 +354,72 @@ def read_manifest(file_list: Path) -> dict[str, list[tuple[int, Path]]]:
     for recording_id in recordings:
         recordings[recording_id].sort(key=lambda item: item[0])
     return recordings
+
+
+def read_recording_metadata(file_list: Path) -> dict[str, dict[str, str]]:
+    """Read optional preprocessing metadata for condition-wise analysis."""
+    path = file_list.parent.parent / "recording_metadata.csv"
+    if not path.is_file():
+        return {}
+    with path.open("r", newline="", encoding="utf-8") as handle:
+        rows = list(csv.DictReader(handle))
+    return {row["recording_id"]: row for row in rows if row.get("recording_id")}
+
+
+def grouped_recording_rows(
+    rows: list[dict[str, object]], metadata_fields: list[str]
+) -> list[dict[str, object]]:
+    """Summarize failure/quality metrics by task, condition, or illumination."""
+    output = []
+    for field in metadata_fields:
+        values = sorted({str(row.get(field, "")) for row in rows if row.get(field, "") != ""})
+        for value in values:
+            selected = [row for row in rows if str(row.get(field, "")) == value]
+            output.append({
+                "group_field": field,
+                "group_value": value,
+                "recordings": len(selected),
+                "mean_recording_mae_bpm": finite_mean([row["mae_bpm"] for row in selected]),
+                "mean_recording_rmse_bpm": finite_mean([row["rmse_bpm"] for row in selected]),
+                "mean_waveform_pearson": finite_mean([row["mean_waveform_pearson"] for row in selected]),
+                "mean_snr_db": finite_mean([row["mean_snr_db"] for row in selected]),
+            })
+    return output
+
+
+def quality_error_correlation_rows(
+    rows: list[dict[str, object]],
+) -> list[dict[str, object]]:
+    """Relate preprocessing image-quality indicators to recording MAE."""
+    fields = (
+        "image_brightness_mean",
+        "image_contrast_std",
+        "dark_pixel_percent",
+        "bright_pixel_percent",
+        "sharpness_laplacian_variance",
+        "motion_mean_absolute_difference",
+    )
+    output = []
+    for field in fields:
+        pairs = []
+        for row in rows:
+            try:
+                quality = float(row[field])
+                error = float(row["mae_bpm"])
+            except (KeyError, TypeError, ValueError):
+                continue
+            if np.isfinite(quality) and np.isfinite(error):
+                pairs.append((quality, error))
+        if pairs:
+            quality, error = map(np.asarray, zip(*pairs))
+            output.append({
+                "quality_metric": field,
+                "recordings": len(pairs),
+                "quality_mean": finite_mean(quality),
+                "quality_std": finite_std(quality),
+                "pearson_with_recording_mae": pearson(quality, error),
+            })
+    return output
 
 
 def load_recording(
@@ -1396,6 +1462,9 @@ def write_summary_text(path: Path, summary: dict[str, object]) -> None:
         f"Dataset / split            : {summary['dataset']} / {summary['split_begin']}–{summary['split_end']}",
         f"Aggregation                : {summary['aggregation']}",
         f"Recordings                 : {summary['number_of_recordings']}",
+        f"Expected recordings        : {summary.get('number_of_expected_recordings', summary['number_of_recordings'])}",
+        f"Failed recordings          : {summary.get('number_of_failed_recordings', 0)}",
+        f"Completion status          : {summary.get('completion_status', 'PASSED')}",
         f"Measurements               : {summary['number_of_measurements']}",
         f"Window / stride            : {summary['window_seconds']} / {summary['stride_seconds']} seconds",
         f"FFT bin spacing            : {summary['fft_bin_spacing_bpm']:.6f} BPM",
@@ -1437,6 +1506,7 @@ def run_protocol(
     recording_rows: list[dict[str, object]] = []
     peak_rows: list[dict[str, object]] = []
     error_rows: list[dict[str, object]] = []
+    metadata = read_recording_metadata(file_list)
 
     print()
     print("#" * 84)
@@ -1460,13 +1530,17 @@ def run_protocol(
             if not measurements:
                 raise RuntimeError("Recording is shorter than the protocol window")
 
-            measurement_rows.extend(
-                measurement_row(run, protocol, item) for item in measurements
-            )
-            peak_rows.extend(peak_row(run, protocol, item) for item in measurements)
-            recording_rows.append(
-                recording_row(run, protocol, recording_id, measurements)
-            )
+            new_measurements = [measurement_row(run, protocol, item) for item in measurements]
+            new_peaks = [peak_row(run, protocol, item) for item in measurements]
+            new_recording = recording_row(run, protocol, recording_id, measurements)
+            extra = metadata.get(recording_id, {})
+            for row in [*new_measurements, *new_peaks, new_recording]:
+                for key, value in extra.items():
+                    if key not in {"dataset", "recording_id"}:
+                        row[key] = value
+            measurement_rows.extend(new_measurements)
+            peak_rows.extend(new_peaks)
+            recording_rows.append(new_recording)
 
             file_stem = safe_name(recording_id)
             title = (
@@ -1513,6 +1587,9 @@ def run_protocol(
         measurement_rows,
         recording_rows,
     )
+    summary["number_of_expected_recordings"] = len(recordings)
+    summary["number_of_failed_recordings"] = len(error_rows)
+    summary["completion_status"] = "PASSED" if not error_rows else "PARTIAL_WITH_ERRORS"
 
     write_csv(directories["tables"] / "ALL_MEASUREMENT_RESULTS.csv", measurement_rows)
     write_csv(directories["tables"] / "ALL_RECORDING_RESULTS.csv", recording_rows)
@@ -1530,6 +1607,26 @@ def run_protocol(
     )
     write_csv(directories["tables"] / "PSD_TOP_PEAKS_SUMMARY.csv", peak_rows)
     write_csv(directories["tables"] / "FAILURE_TYPE_SUMMARY.csv", failure_rows)
+    group_candidates = {
+        "condition",
+        "condition_id",
+        "task",
+        "scenario",
+        "session",
+        "illumination",
+        "sync_method",
+    }
+    metadata_fields = sorted(
+        {key for item in metadata.values() for key in item if key in group_candidates}
+    )
+    write_csv(
+        directories["tables"] / "GROUPED_RECORDING_SUMMARY.csv",
+        grouped_recording_rows(recording_rows, metadata_fields),
+    )
+    write_csv(
+        directories["tables"] / "IMAGE_QUALITY_ERROR_CORRELATION.csv",
+        quality_error_correlation_rows(recording_rows),
+    )
     write_csv(directories["tables"] / "ERRORS.csv", error_rows)
     write_csv(directories["tables"] / "EXTENDED_METRICS.csv", [summary])
     (directories["tables"] / "summary.json").write_text(
@@ -1570,6 +1667,8 @@ def run_protocol(
         f"{run.name} | {protocol.name} | "
         f"MAE={summary['primary_recording_macro_mae_bpm']:.6f} BPM"
     )
+    if error_rows:
+        print(f"WARNING: {len(error_rows)} recordings failed; inspect tables/ERRORS.csv")
     print(f"Saved: {directories['base']}")
     return summary
 

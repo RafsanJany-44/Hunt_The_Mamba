@@ -1,168 +1,97 @@
-# Independent RhythmMamba Data Preprocessing
+# Independent RhythmMamba preprocessing
 
-This folder converts native PURE and UBFC-rPPG data into the `.npy` clips and
-CSV manifests consumed by the simplified `Mamba_Hunt/dataset.py`. It does not
-import the official RhythmMamba repository and does not require YAML files.
+This package reads the native layouts of PURE, UBFC-rPPG, BH-rPPG,
+UBFC-PHYS, COHFACE, and TokyoTech. It creates the 160-frame `.npy` clips and
+CSV manifests consumed directly by `Mamba_Hunt/dataset.py`. It does not import
+the official repository and it does not use YAML.
 
-The implementation preserves the preprocessing settings used by the verified
-baseline:
+## What remains identical
 
-- first-frame Haar face detection;
-- 1.5× enlarged face box;
-- resize to 128 × 128;
-- global per-recording video standardization;
-- global per-recording label standardization;
-- non-overlapping 160-frame chunks;
-- PURE waveform resampling to the video length;
-- native UBFC waveform handling without resampling;
-- official-compatible cache names, clip names and split manifests.
+PURE and UBFC retain the already verified bit-identical route: first-frame
+Haar face detection, 1.5x fixed face box, 128x128 resize, per-recording global
+standardization, standardized waveform, and non-overlapping 160-frame chunks.
 
-## Safety
+The additional datasets use those same image/signal transformations after an
+explicit conversion to the model's 30 Hz time base:
 
-Independent outputs use new directories:
+| Dataset | Native video / label | Evaluation unit | Saved metadata |
+|---|---|---|---|
+| BH-rPPG | variable ~15 fps PNG / ~59 Hz wave | subject-condition | low, medium, high |
+| UBFC-PHYS | 35.138 fps AVI / 64 Hz BVP | subject-task | T1/T2/T3, ctrl/test |
+| COHFACE | 20 fps AVI / 256 Hz HDF5 pulse | subject-session | session, lamp/natural |
+| TokyoTech | nine consecutive 30 fps AVI / 2048 Hz MAT | complete 180 s subject | sync method |
 
-```text
-/media/data/rPPG/rPPG_Data/Mamba_Hunt/
-├── RhythmMamba_Preprocessed/                    # existing verified reference
-├── RhythmMamba_Preprocessed_Smoke_Independent/  # new smoke output
-└── RhythmMamba_Preprocessed_Independent/        # new full output
+The new caches use float32 to control storage. The model loader converts both
+historical float64 and new caches to float32, so model input dtype is
+unchanged. A `recording_metadata.csv` file is written for stratified
+condition/task/illumination evaluation.
+
+## Safe order
+
+1. Edit raw paths in `settings.py`.
+2. Select one dataset in `DATASETS_TO_PROCESS` and keep `RUN_MODE = "smoke"`.
+3. Run the read-only checks:
+
+   ```bash
+   python Mamba_Hunt/Data_Preprocessing/validate_raw_data.py
+   python Mamba_Hunt/Data_Preprocessing/preflight_multidataset.py
+   ```
+
+4. Create one-record smoke output:
+
+   ```bash
+   python Mamba_Hunt/Data_Preprocessing/preprocess_all.py
+   ```
+
+5. Change `RUN_MODE = "full"`, run a dataset-specific script, then validate:
+
+   ```bash
+   python Mamba_Hunt/Data_Preprocessing/preprocess_bh.py
+   python Mamba_Hunt/Data_Preprocessing/validate_cache.py
+   ```
+
+   Equivalent scripts exist for `ubfc_phys`, `cohface`, and `tokyotech`.
+
+6. Repeat for the next dataset. Existing raw data and
+   `RhythmMamba_Preprocessed` are read-only; outputs go only to
+   `RhythmMamba_Preprocessed_Independent`.
+
+## TokyoTech synchronization gate
+
+TokyoTech subjects 05-09 contain more PPG time than the 180 seconds of video.
+The code refuses to guess an offset. Run:
+
+```bash
+python Mamba_Hunt/Data_Preprocessing/audit_tokyotech_sync.py
 ```
 
-The existing `RhythmMamba_Preprocessed` directory is never written by this
-package. The original PURE and UBFC-rPPG datasets are also read only.
-
-## Step 1: edit paths
-
-Open `Data_Preprocessing/settings.py` and verify:
+Inspect `TokyoTech_Synchronization_Audit.csv` and `.json` under `DATA_ROOT`.
+The audit compares first 180 seconds, last 180 seconds, and full-duration
+rescaling using nine 20-second video/PPG HR comparisons plus lag-tolerant
+waveform correlation. Only after inspection set:
 
 ```python
-PURE_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/PURE")
-UBFC_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/UBFC_rPPG")
-DATA_ROOT = Path("/media/data/rPPG/rPPG_Data/Mamba_Hunt")
+TOKYOTECH_ACCEPT_AUDIT_RECOMMENDATIONS = True
 ```
 
-`PURE_RAW_ROOT` may point to `PURE` or directly to `PURE/ALL/ALL`. UBFC may
-use the native `vid_1/vid_1.avi` layout or the compatible
-`subject1/vid.avi` layout.
+Then run the TokyoTech smoke preprocess. This gate prevents an undocumented
+alignment assumption from contaminating the cross-dataset result.
 
-## Step 2: validate the native datasets
+## Full 2 x 6 x 3 evaluation
 
-From the `Catch_The_Mamba` repository root, run:
+After all six full caches validate, run from the `Mamba_Hunt` directory:
 
 ```bash
-python Mamba_Hunt/Data_Preprocessing/validate_raw_data.py
+CUDA_VISIBLE_DEVICES=1 python evaluate_2x6x3.py \
+  2>&1 | tee results/evaluation_protocols/evaluate_2x6x3.log
 ```
 
-Expected counts for the current local data are 59 PURE recordings and 42 UBFC
-recordings.
-
-## Step 3: create independent smoke caches
-
-Keep this value in `Data_Preprocessing/settings.py`:
-
-```python
-RUN_MODE = "smoke"
-```
-
-Then run:
-
-```bash
-python Mamba_Hunt/Data_Preprocessing/preprocess_all.py
-```
-
-Only the first recording of each dataset is processed.
-
-## Step 4: verify exact preprocessing parity
-
-```bash
-python Mamba_Hunt/Data_Preprocessing/parity_check.py
-```
-
-Do not proceed to full preprocessing unless both PURE and UBFC report
-`Parity result: PASSED`. Exact parity is expected when the same OpenCV version
-and Haar-cascade file are used.
-
-## Step 5: preprocess the complete datasets
-
-Change one value:
-
-```python
-RUN_MODE = "full"
-```
-
-Run again:
-
-```bash
-python Mamba_Hunt/Data_Preprocessing/preprocess_all.py
-```
-
-You may process one dataset separately with:
-
-```bash
-python Mamba_Hunt/Data_Preprocessing/preprocess_pure.py
-python Mamba_Hunt/Data_Preprocessing/preprocess_ubfc.py
-```
-
-Validate the resulting full cache before connecting it to training:
-
-```bash
-python Mamba_Hunt/Data_Preprocessing/validate_cache.py
-```
-
-## Step 6: connect Mamba_Hunt to the independent cache
-
-Only after full preprocessing and validation, change the main
-`Mamba_Hunt/settings.py`:
-
-```python
-PREPROCESSED_ROOT = Path(
-    "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed_Independent"
-)
-```
-
-Run the existing inference tests again before beginning new architecture work.
-
-## Why RhythmMamba_DataView is no longer required
-
-The previous compatibility view renamed the native layouts to the names
-expected by the official loaders. The independent adapters read the native
-layouts directly, so no symlink view is required. The existing DataView can
-remain in place for official-repository experiments, but Mamba_Hunt no longer
-depends on it.
-
-## Registering a future dataset
-
-For COHFACE, TokyoTech, or another dataset:
-
-1. Create `datasets/cohface.py` (replace the name as appropriate).
-2. Add an adapter class implementing:
-   - `discover(raw_root)`;
-   - `split(recordings, begin, end)`;
-   - `read_frames(recording)`;
-   - `read_label(recording)`;
-   - `align_label(label, frame_count)`;
-   - `probe(recording)`.
-3. Use `Recording` from `common.py` to describe every raw recording.
-4. Register the adapter in `dataset_registry.py`.
-5. Add its raw path and split fractions to `DATASET_SETTINGS` in `settings.py`.
-6. Run raw validation, one-record smoke preprocessing and parity/shape checks.
-7. Only then run complete preprocessing.
-
-Dataset-specific code should only read frames, read labels, align their timing,
-and define subject-disjoint splits. Face cropping, standardization, chunking,
-cache writing and manifest generation stay in `common.py`.
+PURE and UBFC checkpoints use their held-out native test split on their source
+dataset. Every external target uses the complete dataset. Results are written
+under `results/evaluation_protocols/{PURE_CHECKPOINT,UBFC_CHECKPOINT}` with
+separate `official_mamba`, `old`, and `prism` folders.
 
 ## Dependencies
 
-The preprocessing package requires Python, NumPy, OpenCV and tqdm. The current
-`mamba_hunting` environment already contains these dependencies. On another
-machine they can be installed from `Data_Preprocessing/requirements.txt`. It
-does not require PyTorch, Mamba, the official RhythmMamba code, pandas, YAML,
-or SciPy.
-
-## Attribution
-
-The behavior in `common.py` and the PURE/UBFC adapters was independently
-extracted and adapted from the official RhythmMamba preprocessing loaders for
-compatibility. RhythmMamba is copyright 2024 Zizheng Guo and distributed under
-the MIT License. See `THIRD_PARTY_LICENSES/RhythmMamba_LICENSE.txt`.
+Install `requirements.txt`. COHFACE needs `h5py`; TokyoTech and evaluation need
+SciPy. The original PURE/UBFC parity scripts remain available and unchanged.

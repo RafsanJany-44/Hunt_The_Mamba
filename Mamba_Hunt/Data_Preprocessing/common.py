@@ -1,8 +1,9 @@
 """Shared preprocessing operations extracted from the official data loaders.
 
-The transformations intentionally retain the verified official behavior,
-including float64 cached frames, first-frame face detection, global per-video
-standardization, non-overlapping chunks, and PURE label resampling.
+PURE and UBFC intentionally retain the verified official behavior.  New
+datasets use the same first-frame face crop, global per-recording
+standardization, 160-frame non-overlapping chunks, and a documented conversion
+to the model's 30 Hz time base.
 """
 
 from __future__ import annotations
@@ -59,6 +60,7 @@ class Recording:
     frame_source: str
     label_source: str
     subject_id: int | None = None
+    metadata: tuple[tuple[str, str], ...] = ()
 
 
 @dataclass(frozen=True)
@@ -71,6 +73,7 @@ class ProcessResult:
     label_count: int
     clip_count: int
     reused_existing: bool
+    quality: tuple[tuple[str, str], ...] = ()
 
 
 def resample_ppg(signal: np.ndarray, target_length: int) -> np.ndarray:
@@ -190,6 +193,121 @@ def crop_face_resize(frames: np.ndarray) -> np.ndarray:
     return resized
 
 
+def crop_resize_frame_sequence(frames: Any) -> np.ndarray:
+    """Crop a frame iterator with one first-frame box and store compact uint8.
+
+    This has the same fixed-box behavior as ``crop_face_resize`` but avoids
+    keeping full-resolution long videos in memory.
+    """
+    iterator = iter(frames)
+    try:
+        first = np.asarray(next(iterator))
+    except StopIteration as error:
+        raise RuntimeError("The frame source is empty") from error
+    if first.ndim != 3 or first.shape[-1] != 3:
+        raise ValueError(f"Expected RGB [H,W,3] frame, got {first.shape}")
+
+    if TRANSFORM.crop_face:
+        region = np.asarray(
+            detect_face(
+                first,
+                TRANSFORM.use_large_face_box,
+                TRANSFORM.large_box_coefficient,
+            ),
+            dtype=int,
+        )
+    else:
+        region = np.asarray([0, 0, first.shape[1], first.shape[0]], dtype=int)
+
+    def resize_one(frame: np.ndarray) -> np.ndarray:
+        frame = np.asarray(frame)
+        if TRANSFORM.crop_face:
+            x, y, width, height = region
+            frame = frame[
+                max(y, 0) : min(y + height, frame.shape[0]),
+                max(x, 0) : min(x + width, frame.shape[1]),
+            ]
+            if frame.size == 0:
+                raise RuntimeError(f"Face crop became empty: {region}")
+        return cv2.resize(
+            frame,
+            (TRANSFORM.width, TRANSFORM.height),
+            interpolation=cv2.INTER_AREA,
+        )
+
+    resized = [resize_one(first)]
+    resized.extend(resize_one(frame) for frame in iterator)
+    return np.asarray(resized, dtype=np.uint8)
+
+
+def video_frame_iterator(video_path: str | Path):
+    """Yield RGB frames from an AVI/video file and always release OpenCV."""
+    capture = cv2.VideoCapture(str(video_path))
+    capture.set(cv2.CAP_PROP_POS_MSEC, 0)
+    try:
+        while True:
+            success, frame = capture.read()
+            if not success:
+                break
+            yield cv2.cvtColor(np.asarray(frame), cv2.COLOR_BGR2RGB)
+    finally:
+        capture.release()
+
+
+def temporal_resample(
+    frames: np.ndarray,
+    frame_times: np.ndarray,
+    label: np.ndarray,
+    label_times: np.ndarray,
+    target_fps: float,
+) -> tuple[np.ndarray, np.ndarray]:
+    """Linearly align video and waveform to a shared uniform time grid."""
+    frames = np.asarray(frames)
+    frame_times = np.asarray(frame_times, dtype=np.float64).reshape(-1)
+    label = np.asarray(label, dtype=np.float64).reshape(-1)
+    label_times = np.asarray(label_times, dtype=np.float64).reshape(-1)
+    if frames.shape[0] != frame_times.size or label.size != label_times.size:
+        raise ValueError("Sample arrays and timestamp arrays have unequal lengths")
+    if frames.shape[0] < 2 or label.size < 2:
+        raise ValueError("At least two video and label samples are required")
+    if np.any(np.diff(frame_times) <= 0) or np.any(np.diff(label_times) <= 0):
+        raise ValueError("Video and label timestamps must be strictly increasing")
+
+    frame_times = frame_times - frame_times[0]
+    label_times = label_times - label_times[0]
+    frame_step = float(np.median(np.diff(frame_times)))
+    label_step = float(np.median(np.diff(label_times)))
+    duration = min(frame_times[-1] + frame_step, label_times[-1] + label_step)
+    target_count = int(np.floor(duration * target_fps + 1e-7))
+    if target_count < TRANSFORM.chunk_length:
+        raise RuntimeError(
+            f"Only {target_count} aligned samples; need {TRANSFORM.chunk_length}"
+        )
+    target_times = np.arange(target_count, dtype=np.float64) / target_fps
+
+    right = np.searchsorted(frame_times, target_times, side="right")
+    right = np.clip(right, 1, frames.shape[0] - 1)
+    left = right - 1
+    span = frame_times[right] - frame_times[left]
+    weight = np.clip(
+        ((target_times - frame_times[left]) / span).astype(np.float32),
+        0.0,
+        1.0,
+    )
+
+    # Work in small blocks to cap temporary memory for 1024x1024 source videos.
+    output = np.empty((target_count, *frames.shape[1:]), dtype=np.float32)
+    for start in range(0, target_count, 64):
+        end = min(start + 64, target_count)
+        block_weight = weight[start:end, None, None, None]
+        output[start:end] = (
+            frames[left[start:end]].astype(np.float32) * (1.0 - block_weight)
+            + frames[right[start:end]].astype(np.float32) * block_weight
+        )
+    aligned_label = np.interp(target_times, label_times, label)
+    return output, aligned_label
+
+
 def preprocess_arrays(
     frames: np.ndarray,
     labels: np.ndarray,
@@ -203,6 +321,53 @@ def preprocess_arrays(
     processed_frames = standardized_data(crop_face_resize(frames))
     processed_labels = standardized_label(np.asarray(labels))
     return processed_frames, processed_labels
+
+
+def standardize_aligned_arrays(
+    frames: np.ndarray,
+    labels: np.ndarray,
+    dtype: str = "float32",
+) -> tuple[np.ndarray, np.ndarray]:
+    """Standardize already cropped/time-aligned arrays for new datasets."""
+    frames = np.asarray(frames, dtype=np.float32)
+    frame_mean = float(np.mean(frames, dtype=np.float64))
+    frame_std = float(np.std(frames, dtype=np.float64))
+    if frame_std == 0 or not np.isfinite(frame_std):
+        frames.fill(0)
+    else:
+        frames -= frame_mean
+        frames /= frame_std
+    labels = standardized_label(np.asarray(labels, dtype=np.float64))
+    target_dtype = np.dtype(dtype)
+    return frames.astype(target_dtype, copy=False), labels.astype(target_dtype, copy=False)
+
+
+def image_quality_metrics(frames: np.ndarray) -> tuple[tuple[str, str], ...]:
+    """Compact raw-crop quality indicators used for later failure analysis."""
+    frames = np.asarray(frames)
+    step = max(1, frames.shape[0] // 300)
+    indices = np.arange(0, frames.shape[0], step)
+    sample = np.asarray(frames[indices], dtype=np.float32)
+    gray = np.mean(sample, axis=-1)
+    sharpness = []
+    for frame in sample:
+        uint8_frame = np.clip(frame, 0, 255).astype(np.uint8)
+        sharpness.append(float(cv2.Laplacian(uint8_frame, cv2.CV_64F).var()))
+    if frames.shape[0] > 1:
+        next_indices = np.minimum(indices + 1, frames.shape[0] - 1)
+        next_gray = np.mean(np.asarray(frames[next_indices], dtype=np.float32), axis=-1)
+        motion = float(np.mean(np.abs(next_gray - gray)))
+    else:
+        motion = float("nan")
+    values = {
+        "image_brightness_mean": float(np.mean(gray)),
+        "image_contrast_std": float(np.std(gray)),
+        "dark_pixel_percent": float(np.mean(gray <= 10.0) * 100.0),
+        "bright_pixel_percent": float(np.mean(gray >= 245.0) * 100.0),
+        "sharpness_laplacian_variance": float(np.mean(sharpness)),
+        "motion_mean_absolute_difference": motion,
+    }
+    return tuple((key, f"{value:.12g}") for key, value in values.items())
 
 
 def _atomic_numpy_save(path: Path, value: np.ndarray) -> None:
@@ -267,10 +432,22 @@ def _process_one_recording(
         )
 
     adapter = get_adapter(dataset_name)
-    frames = adapter.read_frames(recording)
-    labels = adapter.read_label(recording)
-    labels = adapter.align_label(labels, frames.shape[0])
-    processed_frames, processed_labels = preprocess_arrays(frames, labels)
+    dataset_settings = DATASET_SETTINGS[dataset_name]
+    if hasattr(adapter, "read_aligned"):
+        frames, labels = adapter.read_aligned(recording)
+        quality = image_quality_metrics(frames)
+        processed_frames, processed_labels = standardize_aligned_arrays(
+            frames,
+            labels,
+            dataset_settings.cache_dtype,
+        )
+    else:
+        # The verified PURE/UBFC route is deliberately unchanged.
+        frames = adapter.read_frames(recording)
+        labels = adapter.read_label(recording)
+        labels = adapter.align_label(labels, frames.shape[0])
+        processed_frames, processed_labels = preprocess_arrays(frames, labels)
+        quality = ()
 
     frame_clip_count = processed_frames.shape[0] // TRANSFORM.chunk_length
     label_clip_count = processed_labels.shape[0] // TRANSFORM.chunk_length
@@ -310,6 +487,7 @@ def _process_one_recording(
         label_count=int(labels.shape[0]),
         clip_count=label_clip_count,
         reused_existing=False,
+        quality=quality,
     )
 
 
@@ -324,6 +502,52 @@ def _write_manifest(path: Path, input_files: list[str]) -> None:
         for input_file in sorted(input_files):
             writer.writerow({"input_files": input_file})
     os.replace(temporary, path)
+
+
+def _write_recording_metadata(
+    dataset_parent: Path,
+    recordings: list[Recording],
+    results: dict[str, ProcessResult],
+) -> Path:
+    """Persist condition/task/illumination fields for stratified evaluation."""
+    path = dataset_parent / "recording_metadata.csv"
+    existing: dict[str, dict[str, str]] = {}
+    if path.is_file():
+        with path.open("r", newline="", encoding="utf-8") as handle:
+            existing = {
+                row["recording_id"]: row
+                for row in csv.DictReader(handle)
+                if row.get("recording_id")
+            }
+    rows: list[dict[str, object]] = []
+    for recording in recordings:
+        row: dict[str, object] = {
+            "dataset": recording.dataset,
+            "source_id": recording.source_id,
+            "recording_id": recording.saved_id,
+            "subject_id": "" if recording.subject_id is None else recording.subject_id,
+        }
+        row.update(dict(recording.metadata))
+        result = results.get(recording.saved_id)
+        if result is not None and result.quality:
+            row.update(dict(result.quality))
+        elif recording.saved_id in existing:
+            for key, value in existing[recording.saved_id].items():
+                row.setdefault(key, value)
+        rows.append(row)
+    keys = ["dataset", "source_id", "recording_id", "subject_id"]
+    for row in rows:
+        for key in row:
+            if key not in keys:
+                keys.append(key)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    temporary = path.with_suffix(".csv.tmp")
+    with temporary.open("w", newline="", encoding="utf-8") as handle:
+        writer = csv.DictWriter(handle, fieldnames=keys)
+        writer.writeheader()
+        writer.writerows(rows)
+    os.replace(temporary, path)
+    return path
 
 
 def _build_manifests(
@@ -432,6 +656,7 @@ def run_dataset(dataset_name: str) -> dict[str, Any]:
         results,
         dataset_parent,
     )
+    metadata_file = _write_recording_metadata(dataset_parent, recordings, results)
     total_clips = sum(result.clip_count for result in results_list)
     reused = sum(result.reused_existing for result in results_list)
 
@@ -445,4 +670,5 @@ def run_dataset(dataset_name: str) -> dict[str, Any]:
         "clips": total_clips,
         "cache_directory": cache_directory,
         "manifests": manifests,
+        "metadata_file": metadata_file,
     }

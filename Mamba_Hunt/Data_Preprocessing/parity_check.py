@@ -49,8 +49,14 @@ def _compare_pair(reference: Path, candidate: Path) -> tuple[bool, float]:
 
 
 def main() -> None:
+    selected = [name for name in DATASETS_TO_PROCESS if name in {"PURE", "UBFC"}]
+    if not selected:
+        raise SystemExit(
+            "Exact official-cache parity applies only to PURE and UBFC. "
+            "Use validate_cache.py for newly integrated datasets."
+        )
     all_passed = True
-    for dataset_name in DATASETS_TO_PROCESS:
+    for dataset_name in selected:
         adapter = get_adapter(dataset_name)
         recordings = adapter.discover(DATASET_SETTINGS[dataset_name].raw_root)
         if not recordings:
@@ -98,4 +104,3 @@ def main() -> None:
 
 if __name__ == "__main__":
     main()
-

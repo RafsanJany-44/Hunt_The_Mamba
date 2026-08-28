@@ -1,7 +1,7 @@
 # Mamba Hunt: simplified RhythmMamba baseline
 
-This flat project contains only the code needed to train and evaluate
-RhythmMamba with the already-preprocessed PURE and UBFC-rPPG caches.
+This flat project contains the code needed to train and evaluate RhythmMamba
+with PURE, UBFC-rPPG, BH-rPPG, UBFC-PHYS, COHFACE, and TokyoTech caches.
 It has no YAML configuration and no command-line argument parser.
 
 ## Important baseline rule
@@ -23,6 +23,8 @@ augmentation corrections belong to the later development phase.
 - `train_*.py` and `evaluate_*.py`: simple entry points.
 - `infer_pure_to_ubfc.py`: test UBFC with the PURE cross checkpoint.
 - `infer_ubfc_to_pure.py`: test PURE with the UBFC cross checkpoint.
+- `Data_Preprocessing/`: independent native-layout preprocessing and metadata.
+- `evaluate_2x6x3.py`: two local checkpoints x six datasets x three protocols.
 
 ## Run order
 
@@ -44,8 +46,8 @@ official PURE and UBFC reference runs have completed.
 Copy the two weights once into this folder:
 
 ```bash
-cp official/RhythmMamba/PreTrainedModels/PURE_cross_RhythmMamba.pth Mamba_Hunt/checkpoints/
-cp official/RhythmMamba/PreTrainedModels/UBFC_cross_RhythmMamba.pth Mamba_Hunt/checkpoints/
+cp official/RhythmMamba/PreTrainedModels/PURE_cross_RhythmMamba.pth Mamba_Hunt/Official_Checkpoints/
+cp official/RhythmMamba/PreTrainedModels/UBFC_cross_RhythmMamba.pth Mamba_Hunt/Official_Checkpoints/
 ```
 
 Then inference is independent of the official code directory:

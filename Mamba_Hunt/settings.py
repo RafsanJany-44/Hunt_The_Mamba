@@ -19,9 +19,9 @@ MAMBA_HUNT_ROOT = Path(__file__).resolve().parent
 # )
 
 PREPROCESSED_ROOT = Path(
-    "/media/data/rPPG/rPPG_Data/Mamba_Hunt/RhythmMamba_Preprocessed_Independent"
+    "/home/rafsan/Documents/Data/Mamba_Hunt_Data/"
+    "RhythmMamba_Preprocessed_Independent"
 )
-
 
 
 OUTPUT_ROOT = MAMBA_HUNT_ROOT / "results"

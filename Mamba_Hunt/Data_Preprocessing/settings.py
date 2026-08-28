@@ -24,7 +24,9 @@ TOKYOTECH_RAW_ROOT = Path("/media/data/rPPG/rPPG_Data/TokyoTechDataset")
 # Output paths
 # -----------------------------------------------------------------------------
 
-DATA_ROOT = Path("/media/data/rPPG/rPPG_Data/Mamba_Hunt")
+DATA_ROOT = Path(
+    "/home/rafsan/Documents/Data/Mamba_Hunt_Data"
+)
 
 # Existing verified cache generated through the official repository.  It is
 # read only by parity_check.py and is never changed by this package.
@@ -36,13 +38,15 @@ SMOKE_CACHE_ROOT = DATA_ROOT / "RhythmMamba_Preprocessed_Smoke_Independent"
 FULL_CACHE_ROOT = DATA_ROOT / "RhythmMamba_Preprocessed_Independent"
 
 
+
+
 # -----------------------------------------------------------------------------
 # Run control
 # -----------------------------------------------------------------------------
 
 # Start with "smoke".  After validate_raw_data.py and parity_check.py pass,
 # change this to "full" and rerun preprocess_all.py.
-RUN_MODE = "smoke"  # allowed values: "smoke", "full"
+RUN_MODE = "full"  # allowed values: "smoke", "full"
 
 # Process one new dataset at a time while validating the integration.  PURE
 # and UBFC remain registered, but do not need to be regenerated.

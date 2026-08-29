@@ -50,7 +50,7 @@ RUN_MODE = "full"  # allowed values: "smoke", "full"
 
 # Process one new dataset at a time while validating the integration.  PURE
 # and UBFC remain registered, but do not need to be regenerated.
-DATASETS_TO_PROCESS = ("BH",)
+DATASETS_TO_PROCESS = ("UBFC_PHYS",)
 SMOKE_RECORDINGS_PER_DATASET = 1
 # New long-video adapters first reduce frames to 128x128 before temporal
 # resampling.  One worker is the conservative default for host RAM.

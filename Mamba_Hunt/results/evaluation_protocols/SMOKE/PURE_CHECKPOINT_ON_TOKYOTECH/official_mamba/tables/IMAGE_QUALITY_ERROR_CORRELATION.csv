@@ -1,0 +1,7 @@
+quality_metric,recordings,quality_mean,quality_std,pearson_with_recording_mae
+image_brightness_mean,1,84.6225967407,0.0,nan
+image_contrast_std,1,27.5013484955,0.0,nan
+dark_pixel_percent,1,0.0,0.0,nan
+bright_pixel_percent,1,0.0,0.0,nan
+sharpness_laplacian_variance,1,209.32221009,0.0,nan
+motion_mean_absolute_difference,1,0.392510205507,0.0,nan

@@ -2,6 +2,23 @@
 
 This module intentionally replaces the official YAML/configuration stack.  Edit
 the paths and run-mode below, then execute ``preprocess_all.py``.
+
+for all dataset creatuin
+From inside Mamba_Hunt:
+
+mkdir -p Data_Preprocessing/synchronization
+
+cp \
+  /home/rafsan/Documents/Data/Mamba_Hunt_Data/TokyoTech_Synchronization_Audit.json \
+  Data_Preprocessing/synchronization/
+
+cp \
+  /home/rafsan/Documents/Data/Mamba_Hunt_Data/TokyoTech_Synchronization_Audit.csv \
+  Data_Preprocessing/synchronization/
+
+python Data_Preprocessing/preprocess_all.py
+
+
 """
 
 from dataclasses import dataclass
@@ -50,7 +67,20 @@ RUN_MODE = "full"  # allowed values: "smoke", "full"
 
 # Process one new dataset at a time while validating the integration.  PURE
 # and UBFC remain registered, but do not need to be regenerated.
-DATASETS_TO_PROCESS = ("UBFC_PHYS",)
+#DATASETS_TO_PROCESS = ("TOKYOTECH",)
+
+
+
+DATASETS_TO_PROCESS = (
+    "PURE",
+    "UBFC",
+    "BH",
+    "UBFC_PHYS",
+    "COHFACE",
+    "TOKYOTECH",
+)
+
+
 SMOKE_RECORDINGS_PER_DATASET = 1
 # New long-video adapters first reduce frames to 128x128 before temporal
 # resampling.  One worker is the conservative default for host RAM.
@@ -64,8 +94,15 @@ TARGET_FPS = 30.0
 # TokyoTech subjects 05-09 contain more than 180 seconds of contact PPG for
 # exactly 180 seconds of video.  Run audit_tokyotech_sync.py and inspect its
 # CSV before changing this to True.  Preprocessing refuses to guess.
-TOKYOTECH_ACCEPT_AUDIT_RECOMMENDATIONS = False
-TOKYOTECH_SYNC_REPORT = DATA_ROOT / "TokyoTech_Synchronization_Audit.json"
+TOKYOTECH_ACCEPT_AUDIT_RECOMMENDATIONS = True
+#TOKYOTECH_SYNC_REPORT = DATA_ROOT / "TokyoTech_Synchronization_Audit.json"
+
+TOKYOTECH_SYNC_REPORT = (
+    Path(__file__).resolve().parent
+    / "synchronization"
+    / "TokyoTech_Synchronization_Audit.json"
+)
+
 
 
 # -----------------------------------------------------------------------------

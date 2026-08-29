@@ -116,14 +116,15 @@ def main() -> None:
                     "best_lag_absolute_correlation": correlation,
                 })
             method_scores.append((float(np.mean(errors)), -float(np.mean(correlations)), method))
-        best = min(method_scores)[2]
+        diagnostic_best = min(method_scores)[2]
         subject_rows.append({
             "subject": subject_dir.name,
             "contact_ppg_duration_seconds": np.asarray(
                 __import__("scipy.io", fromlist=["loadmat"]).loadmat(subject_dir / "contactPPG.mat")["dataA"]
             ).size / 2048.0,
-            "recommended_method": best,
-            "decision_rule": "minimum mean 20-second HR MAE; correlation breaks ties",
+            "recommended_method": "first_180_seconds",
+            "diagnostic_best_method": diagnostic_best,
+            "decision_rule": "Use the protocol-defined first 180 seconds; discard extra PPG tail without time warping.",
         })
 
     output = Path(TOKYOTECH_SYNC_REPORT)
